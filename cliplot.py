@@ -1,6 +1,6 @@
 """
 Draws 2D functions and draws extrapolations of those
-with max second degree polynomials.
+with max third degree polynomials.
 Usage example:
 
 draw:
@@ -13,6 +13,9 @@ python cliplot.py -x 0,1,2,3 -y 0,1,4,9 -v "time" -e 5
 from plumbum import cli
 import matplotlib.pyplot as plt
 import numpy as np
+
+
+MAX_DEGREE = 3
 
 
 class Cliplot(cli.Application):
@@ -36,6 +39,11 @@ class Cliplot(cli.Application):
     def lx_switch(self, label_x):
         """Specify x label"""
         self._lx = label_x
+
+    @cli.switch(['-d', '--degree'], str)
+    def degree_switch(self, degree):
+        """Specify degrees to extrapolate"""
+        self._d = [int(i) for i in degree.split(",") if int(i) <= MAX_DEGREE]
 
     @cli.switch(['-e', '--extrapolate'], str)
     def extrapolate_switch(self, extrapolate):
@@ -71,6 +79,12 @@ class Cliplot(cli.Application):
             return self._extrapolate
         return None
 
+    @property
+    def degree(self):
+        if hasattr(self, '_d'):
+            return self._d
+        return [2]
+
     def _plot_2d(self):
         min_x = min(self.val_x)
         max_x = max(self.val_x)
@@ -79,18 +93,19 @@ class Cliplot(cli.Application):
 
         if self.extrapolate:
             max_x = max(max_x, self.extrapolate)
+            times = 20 * max(1, int(self.extrapolate - self.val_x[-1]))
+            colours = dict(zip(range(1, MAX_DEGREE + 1), ['g+', 'b+', 'r+']))
 
             plt.plot(self.val_x, self.val_y, 'ro')
 
-            degree = 2
-            z = np.polyfit(self.val_x, self.val_y, degree)
-            f = np.poly1d(z)
+            for deg in self.degree:
+                z = np.polyfit(self.val_x, self.val_y, deg)
+                f = np.poly1d(z)
 
-            times = max(1, int(self.extrapolate - self.val_x[-1]))
-            for x in np.linspace(self.val_x[-1], self.extrapolate, 10*times):
-                min_y = min(min_y, f(x))
-                max_y = max(max_y, f(x))
-                plt.plot(x, f(x), 'b+')
+                for x in np.linspace(self.val_x[0], self.extrapolate, times):
+                    min_y = min(min_y, f(x))
+                    max_y = max(max_y, f(x))
+                    plt.plot(x, f(x), colours[deg])
 
         else:
             plt.plot(self.val_x, self.val_y)
@@ -98,9 +113,6 @@ class Cliplot(cli.Application):
         plt.xlabel(self.label_x)
         plt.axis([min_x, max_x, min_y, max_y])
         plt.show()
-
-
-
 
     def main(self):
         self._plot_2d()
